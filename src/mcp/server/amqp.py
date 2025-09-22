@@ -20,37 +20,14 @@ Example usage:
 import ssl
 from contextlib import asynccontextmanager
 
+import aio_pika
 import anyio
 import anyio.lowlevel
-import pika
-import pika.adapters.asyncio_connection
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
 
 import mcp.types as types
 from mcp.shared.message import SessionMessage
 
-
-class RabbitMQConnection:
-    def __init__(self, host: str, port: int, username: str, password: str, use_tls: bool, stream_port: int = 5552):
-        self.host = host
-        self.port = port
-        self.username = username
-        self.password = password
-        self.use_tls = use_tls
-        self.protocol = "amqps" if use_tls else "amqp"
-        self.url = f"{self.protocol}://{username}:{password}@{host}:{port}"
-        self.parameters = pika.URLParameters(self.url)
-        self.stream_port = stream_port
-
-        if use_tls:
-            ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
-            ssl_context.set_ciphers("ECDHE+AESGCM:!ECDSA")
-            self.parameters.ssl_options = pika.SSLOptions(context=ssl_context)
-
-    def get_channel(self) -> tuple[pika.BlockingConnection, pika.channel.Channel]:
-        connection = pika.BlockingConnection(self.parameters)
-        channel = connection.channel()
-        return connection, channel
 
 @asynccontextmanager
 async def amqp_server(
@@ -76,29 +53,32 @@ async def amqp_server(
     write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
 
     url = f"amqps://{username}:{password}@{host}:{port}"
-    parameters = pika.URLParameters(url)
+    
+    # Create SSL context for secure connection
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
     ssl_context.set_ciphers("ECDHE+AESGCM:!ECDSA")
-    parameters.ssl_options = pika.SSLOptions(context=ssl_context)
-
-    connection = await pika.adapters.asyncio_connection.AsyncioConnection.create(parameters)
+    
+    # Connect using aio-pika
+    connection = await aio_pika.connect_robust(url, ssl_context=ssl_context)
     channel = await connection.channel()
     
-    await channel.queue_declare(queue=request_queue, durable=True)
-    await channel.queue_declare(queue=response_queue, durable=True)
+    # Declare queues
+    request_q = await channel.declare_queue(request_queue, durable=True)
+    response_q = await channel.declare_queue(response_queue, durable=True)
 
     async def amqp_reader():
         try:
             async with read_stream_writer:
-                async for method, properties, body in channel.consume(request_queue):
-                    try:
-                        message = types.JSONRPCMessage.model_validate_json(body.decode('utf-8'))
-                        session_message = SessionMessage(message)
-                        await read_stream_writer.send(session_message)
-                        await channel.basic_ack(method.delivery_tag)
-                    except Exception as exc:
-                        await read_stream_writer.send(exc)
-                        await channel.basic_nack(method.delivery_tag, requeue=False)
+                async with request_q.iterator() as queue_iter:
+                    async for message in queue_iter:
+                        try:
+                            json_message = types.JSONRPCMessage.model_validate_json(message.body.decode('utf-8'))
+                            session_message = SessionMessage(json_message)
+                            await read_stream_writer.send(session_message)
+                            await message.ack()
+                        except Exception as exc:
+                            await read_stream_writer.send(exc)
+                            await message.nack(requeue=False)
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()
 
@@ -107,11 +87,12 @@ async def amqp_server(
             async with write_stream_reader:
                 async for session_message in write_stream_reader:
                     json_data = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
-                    await channel.basic_publish(
-                        exchange=exchange,
-                        routing_key=response_queue,
-                        body=json_data.encode('utf-8'),
-                        properties=pika.BasicProperties(delivery_mode=2)
+                    await channel.default_exchange.publish(
+                        aio_pika.Message(
+                            json_data.encode('utf-8'),
+                            delivery_mode=aio_pika.DeliveryMode.PERSISTENT
+                        ),
+                        routing_key=response_queue
                     )
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()
@@ -122,5 +103,4 @@ async def amqp_server(
             tg.start_soon(amqp_writer)
             yield read_stream, write_stream
     finally:
-        await channel.close()
         await connection.close()
