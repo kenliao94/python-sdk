@@ -36,8 +36,6 @@ async def amqp_server(
     username: str,
     password: str,
     name: str,
-    request_queue: str = "mcp-input",
-    response_queue: str = "mcp-output",
 ):
     """
     Server transport for AMQP: this communicates with an MCP client by reading
@@ -70,11 +68,14 @@ async def amqp_server(
     )
     
     # Declare queues
+    request_queue = f"mcp-{name}-request"
+    response_queue = f"mcp-{name}-response"
     request_q = await channel.declare_queue(request_queue, durable=True)
-    await channel.declare_queue(response_queue, durable=True)
+    response_q = await channel.declare_queue(response_queue, durable=True)
 
     # Bind the queues
     await request_q.bind(topic_exchange, routing_key=f"mcp.{name}.request")
+    await response_q.bind(topic_exchange, routing_key=f"mcp.{name}.response")
 
     async def amqp_reader():
         try:

@@ -149,7 +149,7 @@ class FastMCP(Generic[LifespanResultT]):
         transport_security: TransportSecuritySettings | None = None,
     ):
         import sys
-        print("[KEN-LIAO] Instantiated async MCP server", file=sys.stderr)
+        print("[KEN] Instantiated async MCP server", file=sys.stderr)
         self.settings = Settings(
             debug=debug,
             log_level=log_level,
