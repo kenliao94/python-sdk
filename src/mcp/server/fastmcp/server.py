@@ -21,6 +21,7 @@ from starlette.responses import Response
 from starlette.routing import Mount, Route
 from starlette.types import Receive, Scope, Send
 
+from mcp.server.amqp import amqp_server
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.provider import OAuthAuthorizationServerProvider, ProviderTokenVerifier, TokenVerifier
@@ -148,7 +149,7 @@ class FastMCP(Generic[LifespanResultT]):
         transport_security: TransportSecuritySettings | None = None,
     ):
         import sys
-        print("[KEN] Instantiated async MCP server", file=sys.stderr)
+        print("[KEN-LIAO] Instantiated async MCP server", file=sys.stderr)
         self.settings = Settings(
             debug=debug,
             log_level=log_level,
@@ -255,7 +256,7 @@ class FastMCP(Generic[LifespanResultT]):
             case "streamable-http":
                 anyio.run(self.run_streamable_http_async)
             case "amqp":
-                raise NotImplementedError("AMQP 1.0 transport is not implemented")
+                anyio.run(self.run_amqp_async)
 
     def _setup_handlers(self) -> None:
         """Set up core MCP protocol handlers."""
@@ -667,6 +668,19 @@ class FastMCP(Generic[LifespanResultT]):
     async def run_stdio_async(self) -> None:
         """Run the server using stdio transport."""
         async with stdio_server() as (read_stream, write_stream):
+            await self._mcp_server.run(
+                read_stream,
+                write_stream,
+                self._mcp_server.create_initialization_options(),
+            )
+    async def run_amqp_async(self) -> None:
+        """Run the server using amqp transport."""
+        print("[KEN] Running amqp server")
+        async with amqp_server(
+            host="b-9560b8e1-3d33-4d91-9488-a3dc4a61dfe7.mq.us-east-1.amazonaws.com",
+            port= 5671,
+            username="admin",
+            password="admintestrabbit") as (read_stream, write_stream):
             await self._mcp_server.run(
                 read_stream,
                 write_stream,

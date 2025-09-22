@@ -63,6 +63,7 @@ async def stdio_server(
             async with read_stream_writer:
                 async for line in stdin:
                     try:
+                        print(f"received: {line}", file=sys.stderr)
                         message = types.JSONRPCMessage.model_validate_json(line)
                     except Exception as exc:
                         await read_stream_writer.send(exc)
@@ -78,6 +79,7 @@ async def stdio_server(
             async with write_stream_reader:
                 async for session_message in write_stream_reader:
                     json = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
+                    print(f"write: {json}", file=sys.stderr)
                     await stdout.write(json + "\n")
                     await stdout.flush()
         except anyio.ClosedResourceError:
