@@ -35,9 +35,9 @@ async def amqp_server(
     port: int,
     username: str,
     password: str,
+    name: str,
     request_queue: str = "mcp-input",
     response_queue: str = "mcp-output",
-    exchange: str = "",
 ):
     """
     Server transport for AMQP: this communicates with an MCP client by reading
@@ -62,9 +62,19 @@ async def amqp_server(
     connection = await aio_pika.connect_robust(url, ssl_context=ssl_context)
     channel = await connection.channel()
     
+    # Declare the exchange
+    topic_exchange = await channel.declare_exchange(
+        "mcp", 
+        aio_pika.ExchangeType.TOPIC, 
+        durable=True
+    )
+    
     # Declare queues
     request_q = await channel.declare_queue(request_queue, durable=True)
-    response_q = await channel.declare_queue(response_queue, durable=True)
+    await channel.declare_queue(response_queue, durable=True)
+
+    # Bind the queues
+    await request_q.bind(topic_exchange, routing_key=f"mcp.{name}.request")
 
     async def amqp_reader():
         try:
@@ -87,12 +97,12 @@ async def amqp_server(
             async with write_stream_reader:
                 async for session_message in write_stream_reader:
                     json_data = session_message.message.model_dump_json(by_alias=True, exclude_none=True)
-                    await channel.default_exchange.publish(
+                    await topic_exchange.publish(
                         aio_pika.Message(
                             json_data.encode('utf-8'),
                             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
                         ),
-                        routing_key=response_queue
+                        routing_key=f"mcp.{name}.response"
                     )
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()

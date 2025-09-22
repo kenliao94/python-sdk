@@ -680,7 +680,8 @@ class FastMCP(Generic[LifespanResultT]):
             host="b-9560b8e1-3d33-4d91-9488-a3dc4a61dfe7.mq.us-east-1.amazonaws.com",
             port= 5671,
             username="admin",
-            password="admintestrabbit") as (read_stream, write_stream):
+            password="admintestrabbit",
+            name="test") as (read_stream, write_stream):
             await self._mcp_server.run(
                 read_stream,
                 write_stream,
