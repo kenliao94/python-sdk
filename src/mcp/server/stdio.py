@@ -30,6 +30,7 @@ import mcp.types as types
 from mcp.shared.message import SessionMessage
 
 
+# ken_mark
 @asynccontextmanager
 async def stdio_server(
     stdin: anyio.AsyncFile[str] | None = None,

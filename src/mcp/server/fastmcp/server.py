@@ -147,6 +147,8 @@ class FastMCP(Generic[LifespanResultT]):
         auth: AuthSettings | None = None,
         transport_security: TransportSecuritySettings | None = None,
     ):
+        import sys
+        print("[KEN] Instantiated async MCP server", file=sys.stderr)
         self.settings = Settings(
             debug=debug,
             log_level=log_level,
@@ -232,7 +234,7 @@ class FastMCP(Generic[LifespanResultT]):
 
     def run(
         self,
-        transport: Literal["stdio", "sse", "streamable-http"] = "stdio",
+        transport: Literal["stdio", "sse", "streamable-http", "amqp"] = "stdio",
         mount_path: str | None = None,
     ) -> None:
         """Run the FastMCP server. Note this is a synchronous function.
@@ -241,7 +243,7 @@ class FastMCP(Generic[LifespanResultT]):
             transport: Transport protocol to use ("stdio", "sse", or "streamable-http")
             mount_path: Optional mount path for SSE transport
         """
-        TRANSPORTS = Literal["stdio", "sse", "streamable-http"]
+        TRANSPORTS = Literal["stdio", "sse", "streamable-http", "amqp"]
         if transport not in TRANSPORTS.__args__:  # type: ignore
             raise ValueError(f"Unknown transport: {transport}")
 
@@ -252,6 +254,8 @@ class FastMCP(Generic[LifespanResultT]):
                 anyio.run(lambda: self.run_sse_async(mount_path))
             case "streamable-http":
                 anyio.run(self.run_streamable_http_async)
+            case "amqp":
+                raise NotImplementedError("AMQP 1.0 transport is not implemented")
 
     def _setup_handlers(self) -> None:
         """Set up core MCP protocol handlers."""
@@ -659,6 +663,7 @@ class FastMCP(Generic[LifespanResultT]):
 
         return decorator
 
+    # ken_mark run stdio
     async def run_stdio_async(self) -> None:
         """Run the server using stdio transport."""
         async with stdio_server() as (read_stream, write_stream):
@@ -683,6 +688,7 @@ class FastMCP(Generic[LifespanResultT]):
         server = uvicorn.Server(config)
         await server.serve()
 
+    # ken_mark fastmcp run streamable_http
     async def run_streamable_http_async(self) -> None:
         """Run the server using StreamableHTTP transport."""
         import uvicorn

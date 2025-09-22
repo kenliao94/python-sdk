@@ -554,6 +554,7 @@ class Server(Generic[LifespanResultT, RequestT]):
 
         return decorator
 
+    # ken_mark
     async def run(
         self,
         read_stream: MemoryObjectReceiveStream[SessionMessage | Exception],
