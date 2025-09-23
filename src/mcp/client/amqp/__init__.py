@@ -50,7 +50,7 @@ async def amqp_client(server: AmqpServerParameters):
     ssl_context.set_ciphers("ECDHE+AESGCM:!ECDSA")
     
     try:
-        # Connect using aio-pika
+        # Connect
         connection = await aio_pika.connect_robust(url, ssl_context=ssl_context)
         channel = await connection.channel()
         
