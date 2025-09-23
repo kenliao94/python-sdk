@@ -22,6 +22,7 @@ from mcp.os.win32.utilities import (
 )
 from mcp.shared.message import SessionMessage
 
+# ken_mark
 logger = logging.getLogger(__name__)
 
 # Environment variables to inherit by default
