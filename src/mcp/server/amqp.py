@@ -41,8 +41,8 @@ class AMQPSettings(BaseModel):
     host: str
     port: int
     auth: OAuth | BasicAuth
-    publish_routing_key: str | None = None
-    consume_routing_key: str | None = None
+    to_client_routing_key: str | None = None
+    from_client_routing_key: str | None = None
 
 @asynccontextmanager
 async def amqp_server(
@@ -92,15 +92,12 @@ async def amqp_server(
     
     # Declare queues
     request_queue = f"mcp-{name}-request"
-    response_queue = f"mcp-{name}-response"
     request_q = await channel.declare_queue(request_queue, durable=True)
-    response_q = await channel.declare_queue(response_queue, durable=True)
 
     # Bind the queues
-    request_routing_key = amqp_settings.consume_routing_key or f"mcp.{name}.request"
-    response_routing_key = amqp_settings.publish_routing_key or f"mcp.{name}.response"
-    await request_q.bind(topic_exchange, routing_key=request_routing_key)
-    await response_q.bind(topic_exchange, routing_key=response_routing_key)
+    from_client_routing_key = amqp_settings.from_client_routing_key or f"mcp.{name}.request"
+    to_client_routing_key = amqp_settings.to_client_routing_key or f"mcp.{name}.response"
+    await request_q.bind(topic_exchange, routing_key=from_client_routing_key)
 
     async def amqp_reader():
         try:
@@ -128,7 +125,7 @@ async def amqp_server(
                             json_data.encode('utf-8'),
                             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
                         ),
-                        routing_key=f"mcp.{name}.response"
+                        routing_key=to_client_routing_key
                     )
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()

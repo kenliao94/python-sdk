@@ -17,8 +17,8 @@ class AmqpServerParameters(BaseModel):
     username: str
     password: str
     name: str
-    publish_routing_key: str | None = None
-    consume_routing_key: str | None = None
+    to_mcp_routing_key: str | None = None
+    from_mcp_routing_key: str | None = None
 
 
 @asynccontextmanager
@@ -55,17 +55,14 @@ async def amqp_client(server: AmqpServerParameters):
         )
         
         # Declare queues (client reads from response, writes to request)
-        request_queue = f"mcp-{server.name}-request"
         response_queue = f"mcp-{server.name}-response"
-        request_q = await channel.declare_queue(request_queue, durable=True)
         response_q = await channel.declare_queue(response_queue, durable=True)
 
         # Bind the queues
         name = server.name
-        request_routing_key = server.consume_routing_key if server.consume_routing_key else f"mcp.{name}.request"
-        response_routing_key = server.publish_routing_key if server.publish_routing_key else f"mcp.{name}.response"
-        await request_q.bind(topic_exchange, routing_key=request_routing_key)
-        await response_q.bind(topic_exchange, routing_key=response_routing_key)
+        to_mcp_routing_key = server.to_mcp_routing_key if server.to_mcp_routing_key else f"mcp.{name}.request"
+        from_mcp_routing_key = server.from_mcp_routing_key if server.from_mcp_routing_key else f"mcp.{name}.response"
+        await response_q.bind(topic_exchange, routing_key=from_mcp_routing_key)
 
     except Exception:
         # Clean up streams if connection fails
@@ -101,7 +98,7 @@ async def amqp_client(server: AmqpServerParameters):
                             json_data.encode('utf-8'),
                             delivery_mode=aio_pika.DeliveryMode.PERSISTENT
                         ),
-                        routing_key=f"mcp.{server.name}.request"
+                        routing_key=to_mcp_routing_key
                     )
         except anyio.ClosedResourceError:
             await anyio.lowlevel.checkpoint()
