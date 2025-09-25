@@ -13,19 +13,12 @@ from mcp.shared.message import SessionMessage
 
 class AmqpServerParameters(BaseModel):
     host: str
-    """The RabbitMQ host to connect to."""
-    
     port: int = 5671
-    """The RabbitMQ port (default: 5671 for AMQPS)."""
-    
     username: str
-    """Username for RabbitMQ authentication."""
-    
     password: str
-    """Password for RabbitMQ authentication."""
-    
     name: str
-    """Server name for queue naming."""
+    publish_routing_key: str | None = None
+    consume_routing_key: str | None = None
 
 
 @asynccontextmanager
@@ -68,8 +61,11 @@ async def amqp_client(server: AmqpServerParameters):
         response_q = await channel.declare_queue(response_queue, durable=True)
 
         # Bind the queues
-        await request_q.bind(topic_exchange, routing_key=f"mcp.{server.name}.request")
-        await response_q.bind(topic_exchange, routing_key=f"mcp.{server.name}.response")
+        name = server.name
+        request_routing_key = server.consume_routing_key if server.consume_routing_key else f"mcp.{name}.request"
+        response_routing_key = server.publish_routing_key if server.publish_routing_key else f"mcp.{name}.response"
+        await request_q.bind(topic_exchange, routing_key=request_routing_key)
+        await response_q.bind(topic_exchange, routing_key=response_routing_key)
 
     except Exception:
         # Clean up streams if connection fails

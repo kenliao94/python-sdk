@@ -24,18 +24,30 @@ import aio_pika
 import anyio
 import anyio.lowlevel
 from anyio.streams.memory import MemoryObjectReceiveStream, MemoryObjectSendStream
+from pydantic import BaseModel
 
 import mcp.types as types
 from mcp.shared.message import SessionMessage
 
 
+class OAuth(BaseModel):
+    access_token: str
+
+class BasicAuth(BaseModel):
+    username: str
+    password: str
+
+class AMQPSettings(BaseModel):
+    host: str
+    port: int
+    auth: OAuth | BasicAuth
+    publish_routing_key: str | None = None
+    consume_routing_key: str | None = None
+
 @asynccontextmanager
 async def amqp_server(
-    host: str,
-    port: int,
-    username: str,
-    password: str,
     name: str,
+    amqp_settings: AMQPSettings
 ):
     """
     Server transport for AMQP: this communicates with an MCP client by reading
@@ -49,8 +61,19 @@ async def amqp_server(
 
     read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
     write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+    
+    auth = amqp_settings.auth
+    username = None
+    password = None
+    
+    if isinstance(auth, OAuth): 
+        username = ""
+        password = auth.access_token
+    elif isinstance(auth, BasicAuth):
+        username = auth.username
+        password = auth.password
 
-    url = f"amqps://{username}:{password}@{host}:{port}"
+    url = f"amqps://{username}:{password}@{amqp_settings.host}:{amqp_settings.port}"
     
     # Create SSL context for secure connection
     ssl_context = ssl.SSLContext(ssl.PROTOCOL_TLSv1_2)
@@ -74,8 +97,10 @@ async def amqp_server(
     response_q = await channel.declare_queue(response_queue, durable=True)
 
     # Bind the queues
-    await request_q.bind(topic_exchange, routing_key=f"mcp.{name}.request")
-    await response_q.bind(topic_exchange, routing_key=f"mcp.{name}.response")
+    request_routing_key = amqp_settings.consume_routing_key or f"mcp.{name}.request"
+    response_routing_key = amqp_settings.publish_routing_key or f"mcp.{name}.response"
+    await request_q.bind(topic_exchange, routing_key=request_routing_key)
+    await response_q.bind(topic_exchange, routing_key=response_routing_key)
 
     async def amqp_reader():
         try:

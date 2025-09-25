@@ -21,7 +21,7 @@ from starlette.responses import Response
 from starlette.routing import Mount, Route
 from starlette.types import Receive, Scope, Send
 
-from mcp.server.amqp import amqp_server
+from mcp.server.amqp import AMQPSettings, amqp_server
 from mcp.server.auth.middleware.auth_context import AuthContextMiddleware
 from mcp.server.auth.middleware.bearer_auth import BearerAuthBackend, RequireAuthMiddleware
 from mcp.server.auth.provider import OAuthAuthorizationServerProvider, ProviderTokenVerifier, TokenVerifier
@@ -106,6 +106,9 @@ class Settings(BaseSettings, Generic[LifespanResultT]):
 
     # Transport security settings (DNS rebinding protection)
     transport_security: TransportSecuritySettings | None
+    
+    # AMQP transport settings
+    amqp_settings: AMQPSettings | None
 
 
 def lifespan_wrapper(
@@ -147,6 +150,7 @@ class FastMCP(Generic[LifespanResultT]):
         lifespan: Callable[[FastMCP[LifespanResultT]], AbstractAsyncContextManager[LifespanResultT]] | None = None,
         auth: AuthSettings | None = None,
         transport_security: TransportSecuritySettings | None = None,
+        amqp_settings: AMQPSettings | None = None,
     ):
         import sys
         print("[KEN] Instantiated async MCP server", file=sys.stderr)
@@ -168,6 +172,7 @@ class FastMCP(Generic[LifespanResultT]):
             lifespan=lifespan,
             auth=auth,
             transport_security=transport_security,
+            amqp_settings=amqp_settings,
         )
 
         self._mcp_server = MCPServer(
@@ -664,7 +669,6 @@ class FastMCP(Generic[LifespanResultT]):
 
         return decorator
 
-    # ken_mark run stdio
     async def run_stdio_async(self) -> None:
         """Run the server using stdio transport."""
         async with stdio_server() as (read_stream, write_stream):
@@ -676,12 +680,10 @@ class FastMCP(Generic[LifespanResultT]):
     async def run_amqp_async(self) -> None:
         """Run the server using amqp transport."""
         print("[KEN] Running amqp server")
+        assert self.settings.amqp_settings is not None
         async with amqp_server(
-            host="b-9560b8e1-3d33-4d91-9488-a3dc4a61dfe7.mq.us-east-1.amazonaws.com",
-            port= 5671,
-            username="admin",
-            password="admintestrabbit",
-            name="test") as (read_stream, write_stream):
+            amqp_settings=self.settings.amqp_settings,
+            name=self.name) as (read_stream, write_stream):
             await self._mcp_server.run(
                 read_stream,
                 write_stream,
@@ -703,7 +705,6 @@ class FastMCP(Generic[LifespanResultT]):
         server = uvicorn.Server(config)
         await server.serve()
 
-    # ken_mark fastmcp run streamable_http
     async def run_streamable_http_async(self) -> None:
         """Run the server using StreamableHTTP transport."""
         import uvicorn
