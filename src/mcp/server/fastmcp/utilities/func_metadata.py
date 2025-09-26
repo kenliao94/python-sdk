@@ -84,6 +84,7 @@ class FuncMetadata(BaseModel):
         arguments_parsed_dict |= arguments_to_pass_directly or {}
 
         if fn_is_async:
+            print("[KEN] Encountered an async tool")
             return await fn(**arguments_parsed_dict)
         else:
             return fn(**arguments_parsed_dict)

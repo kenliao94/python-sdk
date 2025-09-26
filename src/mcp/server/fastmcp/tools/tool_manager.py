@@ -42,6 +42,7 @@ class ToolManager:
         """List all registered tools."""
         return list(self._tools.values())
 
+    # ken_mark how a tool is defined and add
     def add_tool(
         self,
         fn: Callable[..., Any],
@@ -50,6 +51,7 @@ class ToolManager:
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         structured_output: bool | None = None,
+        is_long_running: bool | None = None,
     ) -> Tool:
         """Add a tool to the server."""
         tool = Tool.from_function(
@@ -59,6 +61,7 @@ class ToolManager:
             description=description,
             annotations=annotations,
             structured_output=structured_output,
+            is_long_running=is_long_running,
         )
         existing = self._tools.get(tool.name)
         if existing:

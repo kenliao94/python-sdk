@@ -838,6 +838,12 @@ class ToolAnnotations(BaseModel):
     Default: true
     """
     model_config = ConfigDict(extra="allow")
+    
+    """
+    If true, this tool is long running and return enough information for the client to register a callback when
+    the task is complete
+    """
+    longRuningHint: bool | None = None
 
 
 class Tool(BaseMetadata):

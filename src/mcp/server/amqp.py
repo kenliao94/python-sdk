@@ -99,6 +99,7 @@ async def amqp_server(
     to_client_routing_key = amqp_settings.to_client_routing_key or f"mcp.{name}.response"
     await request_q.bind(topic_exchange, routing_key=from_client_routing_key)
 
+    # TODO(ken) use a queue to queue up request-response for different client
     async def amqp_reader():
         try:
             async with read_stream_writer:

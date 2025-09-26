@@ -175,6 +175,7 @@ class FastMCP(Generic[LifespanResultT]):
             amqp_settings=amqp_settings,
         )
 
+        # ken_mark understand the message flow
         self._mcp_server = MCPServer(
             name=name or "FastMCP",
             instructions=instructions,
@@ -358,6 +359,7 @@ class FastMCP(Generic[LifespanResultT]):
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         structured_output: bool | None = None,
+        is_long_running: bool | None = None, 
     ) -> None:
         """Add a tool to the server.
 
@@ -382,8 +384,10 @@ class FastMCP(Generic[LifespanResultT]):
             description=description,
             annotations=annotations,
             structured_output=structured_output,
+            is_long_running=is_long_running,
         )
 
+    # ken_mark this is the decorator that adds a tool to the list
     def tool(
         self,
         name: str | None = None,
@@ -391,6 +395,7 @@ class FastMCP(Generic[LifespanResultT]):
         description: str | None = None,
         annotations: ToolAnnotations | None = None,
         structured_output: bool | None = None,
+        is_long_running: bool | None = None,
     ) -> Callable[[AnyFunction], AnyFunction]:
         """Decorator to register a tool.
 
@@ -437,6 +442,7 @@ class FastMCP(Generic[LifespanResultT]):
                 description=description,
                 annotations=annotations,
                 structured_output=structured_output,
+                is_long_running=is_long_running
             )
             return fn
 

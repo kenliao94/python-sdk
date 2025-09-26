@@ -19,6 +19,7 @@ if TYPE_CHECKING:
     from mcp.shared.context import LifespanContextT, RequestT
 
 
+# ken_mark the internal representation of a tool
 class Tool(BaseModel):
     """Internal tool registration info."""
 
@@ -33,6 +34,7 @@ class Tool(BaseModel):
     is_async: bool = Field(description="Whether the tool is async")
     context_kwarg: str | None = Field(None, description="Name of the kwarg that should receive context")
     annotations: ToolAnnotations | None = Field(None, description="Optional annotations for the tool")
+    is_long_running: bool | None = Field(None, description="Whether the tool is long running")
 
     @cached_property
     def output_schema(self) -> dict[str, Any] | None:
@@ -48,6 +50,7 @@ class Tool(BaseModel):
         context_kwarg: str | None = None,
         annotations: ToolAnnotations | None = None,
         structured_output: bool | None = None,
+        is_long_running: bool | None = None,
     ) -> Tool:
         """Create a Tool from a function."""
         func_name = name or fn.__name__
@@ -56,7 +59,9 @@ class Tool(BaseModel):
             raise ValueError("You must provide a name for lambda functions")
 
         func_doc = description or fn.__doc__ or ""
-        is_async = _is_async_callable(fn)
+        is_async = _is_async_callable(fn) # the is async in this context means the function is async def
+        print(f"[KEN] the tool {func_name} is_async = {is_async}")
+        print(f"[KEN] the tool {func_name} is_long_running = {is_long_running}")
 
         if context_kwarg is None:
             context_kwarg = find_context_parameter(fn)
@@ -78,6 +83,7 @@ class Tool(BaseModel):
             is_async=is_async,
             context_kwarg=context_kwarg,
             annotations=annotations,
+            is_long_running=is_long_running,
         )
 
     async def run(
@@ -88,6 +94,8 @@ class Tool(BaseModel):
     ) -> Any:
         """Run the tool with arguments."""
         try:
+            print(f"[KEN] is the tool long running: {self.is_long_running}")
+                
             result = await self.fn_metadata.call_fn_with_arg_validation(
                 self.fn,
                 self.is_async,
