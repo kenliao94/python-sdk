@@ -1,5 +1,6 @@
 from __future__ import annotations as _annotations
 
+import asyncio
 import functools
 import inspect
 from collections.abc import Callable
@@ -95,20 +96,43 @@ class Tool(BaseModel):
         """Run the tool with arguments."""
         try:
             print(f"[KEN] is the tool long running: {self.is_long_running}")
+            
+            if not self.is_long_running:
+                result = await self.fn_metadata.call_fn_with_arg_validation(
+                    self.fn,
+                    self.is_async,
+                    arguments,
+                    {self.context_kwarg: context} if self.context_kwarg is not None else None,
+                )
+
+                if convert_result:
+                    result = self.fn_metadata.convert_result(result)
+
+                return result
+            else:
                 
+                return await self.run_background("foo_queue", arguments, context)
+        except Exception as e:
+            raise ToolError(f"Error executing tool {self.name}: {e}") from e
+    
+    async def run_background(self,
+                             temp_queue: str, arguments: dict[str, Any],
+                             context: Context[ServerSessionT, LifespanContextT, RequestT] | None = None,
+                             convert_result: bool = False) -> Any:
+        async def execute_fn():
             result = await self.fn_metadata.call_fn_with_arg_validation(
                 self.fn,
                 self.is_async,
                 arguments,
                 {self.context_kwarg: context} if self.context_kwarg is not None else None,
             )
-
             if convert_result:
                 result = self.fn_metadata.convert_result(result)
-
+            print(f"[Ken] Got final result: {result}")
             return result
-        except Exception as e:
-            raise ToolError(f"Error executing tool {self.name}: {e}") from e
+
+        asyncio.create_task(execute_fn())
+        return self.fn_metadata.convert_result(f"temp_queue is {temp_queue}")
 
 
 def _is_async_callable(obj: Any) -> bool:

@@ -44,24 +44,7 @@ class AMQPSettings(BaseModel):
     to_client_routing_key: str | None = None
     from_client_routing_key: str | None = None
 
-@asynccontextmanager
-async def amqp_server(
-    name: str,
-    amqp_settings: AMQPSettings
-):
-    """
-    Server transport for AMQP: this communicates with an MCP client by reading
-    from a RabbitMQ request queue and writing to a response queue.
-    """
-    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
-    read_stream_writer: MemoryObjectSendStream[SessionMessage | Exception]
-
-    write_stream: MemoryObjectSendStream[SessionMessage]
-    write_stream_reader: MemoryObjectReceiveStream[SessionMessage]
-
-    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
-    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
-    
+async def __connect_amqp(amqp_settings: AMQPSettings):
     auth = amqp_settings.auth
     username = None
     password = None
@@ -82,6 +65,34 @@ async def amqp_server(
     # Connect using aio-pika
     connection = await aio_pika.connect_robust(url, ssl_context=ssl_context)
     channel = await connection.channel()
+    
+    return connection, channel
+
+async def declare_queue(amqp_settings: AMQPSettings):
+    pass
+
+async def publish_to_queue(amqp_settings: AMQPSettings):
+    pass
+
+@asynccontextmanager
+async def amqp_server(
+    name: str,
+    amqp_settings: AMQPSettings
+):
+    """
+    Server transport for AMQP: this communicates with an MCP client by reading
+    from a RabbitMQ request queue and writing to a response queue.
+    """
+    read_stream: MemoryObjectReceiveStream[SessionMessage | Exception]
+    read_stream_writer: MemoryObjectSendStream[SessionMessage | Exception]
+
+    write_stream: MemoryObjectSendStream[SessionMessage]
+    write_stream_reader: MemoryObjectReceiveStream[SessionMessage]
+
+    read_stream_writer, read_stream = anyio.create_memory_object_stream(0)
+    write_stream, write_stream_reader = anyio.create_memory_object_stream(0)
+    
+    connection, channel = await __connect_amqp(amqp_settings=amqp_settings)
     
     # Declare the exchange
     topic_exchange = await channel.declare_exchange(
