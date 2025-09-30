@@ -11,6 +11,8 @@ import mcp.types as types
 from mcp.shared.message import SessionMessage
 
 
+# TODO(ken) let customer specify an exchange, no need to do to_mcp_routing_key - internally determined
+# the client will attach a client ID and replyTo queue in the message
 class AmqpServerParameters(BaseModel):
     host: str
     port: int = 5671

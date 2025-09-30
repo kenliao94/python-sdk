@@ -40,7 +40,7 @@ class BasicAuth(BaseModel):
 class AMQPSettings(BaseModel):
     host: str
     port: int
-    auth: OAuth | BasicAuth
+    auth: OAuth | BasicAuth | None = None
     to_client_routing_key: str | None = None
     from_client_routing_key: str | None = None
 
@@ -55,6 +55,8 @@ async def __connect_amqp(amqp_settings: AMQPSettings):
     elif isinstance(auth, BasicAuth):
         username = auth.username
         password = auth.password
+    else:
+        raise ValueError("Unsupported auth settings {auth}")
 
     url = f"amqps://{username}:{password}@{amqp_settings.host}:{amqp_settings.port}"
     
