@@ -19,8 +19,7 @@ class AmqpServerParameters(BaseModel):
     username: str
     password: str
     name: str
-    to_mcp_routing_key: str | None = None
-    from_mcp_routing_key: str | None = None
+    exchange_name: str
 
 
 @asynccontextmanager
@@ -51,20 +50,19 @@ async def amqp_client(server: AmqpServerParameters):
         
         # Declare the exchange
         topic_exchange = await channel.declare_exchange(
-            "mcp", 
+            server.exchange_name, 
             aio_pika.ExchangeType.TOPIC, 
             durable=True
         )
         
         # Declare queues (client reads from response, writes to request)
-        response_queue = f"mcp-{server.name}-response"
-        response_q = await channel.declare_queue(response_queue, durable=True)
+        response_queue_name = f"mcp-{server.name}-response"
+        response_queue = await channel.declare_queue(response_queue_name, durable=True)
 
         # Bind the queues
-        name = server.name
-        to_mcp_routing_key = server.to_mcp_routing_key if server.to_mcp_routing_key else f"mcp.{name}.request"
-        from_mcp_routing_key = server.from_mcp_routing_key if server.from_mcp_routing_key else f"mcp.{name}.response"
-        await response_q.bind(topic_exchange, routing_key=from_mcp_routing_key)
+        to_mcp_routing_key = f"mcp.{server.name}.request"
+        from_mcp_routing_key = f"mcp.{server.name}.response"
+        await response_queue.bind(topic_exchange, routing_key=from_mcp_routing_key)
 
     except Exception:
         # Clean up streams if connection fails
@@ -77,7 +75,7 @@ async def amqp_client(server: AmqpServerParameters):
     async def amqp_reader():
         try:
             async with read_stream_writer:
-                async with response_q.iterator() as queue_iter:
+                async with response_queue.iterator() as queue_iter:
                     async for message in queue_iter:
                         try:
                             json_message = types.JSONRPCMessage.model_validate_json(message.body.decode('utf-8'))

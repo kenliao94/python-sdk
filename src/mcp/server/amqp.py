@@ -40,9 +40,8 @@ class BasicAuth(BaseModel):
 class AMQPSettings(BaseModel):
     host: str
     port: int
+    exchange_name: str
     auth: OAuth | BasicAuth | None = None
-    to_client_routing_key: str | None = None
-    from_client_routing_key: str | None = None
 
 async def __connect_amqp(amqp_settings: AMQPSettings):
     auth = amqp_settings.auth
@@ -98,25 +97,25 @@ async def amqp_server(
     
     # Declare the exchange
     topic_exchange = await channel.declare_exchange(
-        "mcp", 
+        amqp_settings.exchange_name, 
         aio_pika.ExchangeType.TOPIC, 
         durable=True
     )
     
     # Declare queues
-    request_queue = f"mcp-{name}-request"
-    request_q = await channel.declare_queue(request_queue, durable=True)
+    request_queue_name = f"mcp-{name}-request"
+    request_queue = await channel.declare_queue(request_queue_name, durable=True)
 
     # Bind the queues
-    from_client_routing_key = amqp_settings.from_client_routing_key or f"mcp.{name}.request"
-    to_client_routing_key = amqp_settings.to_client_routing_key or f"mcp.{name}.response"
-    await request_q.bind(topic_exchange, routing_key=from_client_routing_key)
+    from_client_routing_key = f"mcp.{name}.request"
+    to_client_routing_key = f"mcp.{name}.response"
+    await request_queue.bind(topic_exchange, routing_key=from_client_routing_key)
 
     # TODO(ken) use a queue to queue up request-response for different client
     async def amqp_reader():
         try:
             async with read_stream_writer:
-                async with request_q.iterator() as queue_iter:
+                async with request_queue.iterator() as queue_iter:
                     async for message in queue_iter:
                         try:
                             json_message = types.JSONRPCMessage.model_validate_json(message.body.decode('utf-8'))
